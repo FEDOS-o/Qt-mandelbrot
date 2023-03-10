@@ -1,37 +1,47 @@
-#include <iostream>
 #include "rendering_worker.h"
 
-input_params::input_params(int w, int h, double scale, std::complex<double> center_offset, int batch) : w(w), h(h), scale(scale), center_offset(center_offset), batch(batch)
-{
+
+input_params::input_params(int w, int h, double scale, std::complex<double> center_offset) : w(w), h(h), scale(scale),
+                                                                                             center_offset(
+                                                                                                     center_offset),
+                                                                                             batch(rendering_worker::BEGIN_BATCH_SIZE) {
+}
+
+
+input_params::input_params(int w, int h, double scale, std::complex<double> center_offset, int batch) : w(w), h(h),
+                                                                                                        scale(scale),
+                                                                                                        center_offset(
+                                                                                                                center_offset),
+                                                                                                        batch(batch) {
 
 }
 
-rendering_result::rendering_result(int w, int h)
-{
+
+rendering_result::rendering_result(int w, int h) {
     threads_finished = 0;
     img = QImage(w, h, QImage::Format_RGB888);
 }
 
-rendering_worker::rendering_worker() : input_version(INPUT_VERSION_QUIT + 1)
-{
+
+rendering_worker::rendering_worker() : input_version(INPUT_VERSION_QUIT + 1) {
     int i = 0;
-    for (auto &t : worker_threads) {
-        t = std::thread([this, i] {thread_proc(i);});
+    for (auto &t: worker_threads) {
+        t = std::thread([this, i] { thread_proc(i); });
         i++;
     }
 }
 
-rendering_worker::~rendering_worker()
-{
+
+rendering_worker::~rendering_worker() {
     input_version = INPUT_VERSION_QUIT;
     input_changed.notify_all();
-    for (auto &t : worker_threads) {
+    for (auto &t: worker_threads) {
         t.join();
     }
 }
 
-void rendering_worker::set_input(std::optional<input_params> val)
-{
+
+void rendering_worker::set_input(std::optional <input_params> val) {
     {
         std::lock_guard lg(m);
         val->result = std::make_shared<rendering_result>(val->w, val->h);
@@ -41,23 +51,22 @@ void rendering_worker::set_input(std::optional<input_params> val)
     input_changed.notify_all();
 }
 
-std::optional<QImage> rendering_worker::get_output() const
-{
+
+std::optional <QImage> rendering_worker::get_output() const {
     {
         std::lock_guard lg(m);
         return output;
     }
 }
 
-void rendering_worker::thread_proc(int thread_num)
-{
+
+void rendering_worker::thread_proc(int thread_num) {
     uint64_t last_input_version = 0;
     for (;;) {
-        std::optional<input_params> input_copy;
+        std::optional <input_params> input_copy;
         {
             std::unique_lock lg(m);
-            input_changed.wait(lg, [&]{return input_version != last_input_version;});
-
+            input_changed.wait(lg, [&] { return input_version != last_input_version; });
             last_input_version = input_version;
             if (last_input_version == INPUT_VERSION_QUIT) {
                 break;
@@ -65,8 +74,7 @@ void rendering_worker::thread_proc(int thread_num)
 
             input_copy = input;
         }
-
-        std::optional<QImage> result;
+        std::optional <QImage> result;
         if (input_copy) {
             batch_calc(last_input_version, *input_copy, thread_num);
         } else {
@@ -75,8 +83,8 @@ void rendering_worker::thread_proc(int thread_num)
     }
 }
 
-double rendering_worker::pixel_color(int x, int y, int width, int height, double scale, std::complex<double> center_offset)
-{
+
+double rendering_worker::pixel_color(int x, int y, int width, int height, double scale, std::complex<double> center_offset) {
     std::complex<double> c(x - width / 2., y - height / 2.);
     c += center_offset;
     c *= scale;
@@ -96,16 +104,15 @@ double rendering_worker::pixel_color(int x, int y, int width, int height, double
 }
 
 
-void rendering_worker::batch_calc(uint64_t last_input_version, input_params params, int thread_num)
-{
+void rendering_worker::batch_calc(uint64_t last_input_version, input_params params, int thread_num) {
     if (last_input_version != input_version) return;
-    std::shared_ptr<rendering_result> res = params.result;
+    std::shared_ptr <rendering_result> res = params.result;
     int layers_count = (params.h + params.batch - 1) / params.batch;
     int st = layers_count * thread_num / (THREADS_MAX - 1);
     int end = layers_count * (thread_num + 1) / (THREADS_MAX - 1);
     if (last_input_version != input_version) return;
     for (int layer = st; layer < end; layer++) {
-        uchar* image_start = res->img.bits();
+        uchar *image_start = res->img.bits();
         int j = layer * params.batch;
         if (last_input_version != input_version) return;
         for (int i = 0; i < params.w; i += params.batch) {
@@ -114,7 +121,7 @@ void rendering_worker::batch_calc(uint64_t last_input_version, input_params para
             if (last_input_version != input_version) return;
             for (int jj = j; jj < std::min(j + params.batch, params.h); jj++) {
                 if (last_input_version != input_version) return;
-                uchar* p = image_start + jj * res->img.bytesPerLine() + i * sizeof(uchar) * 3;
+                uchar *p = image_start + jj * res->img.bytesPerLine() + i * sizeof(uchar) * 3;
                 for (int ii = i; ii < std::min(i + params.batch, params.w); ii++) {
                     if (last_input_version != input_version) return;
                     *p++ = static_cast<uchar>(val * 0xff);
@@ -134,21 +141,17 @@ void rendering_worker::batch_calc(uint64_t last_input_version, input_params para
 }
 
 
-
-
-void rendering_worker::store_result(const std::optional<QImage> &result)
-{
+void rendering_worker::store_result(const std::optional <QImage> &result) {
     std::lock_guard lg(m);
     output = result;
-
     if (!notify_output_queued) {
         QMetaObject::invokeMethod(this, "notify_output");
         notify_output_queued = true;
     }
 }
 
-void rendering_worker::notify_output()
-{
+
+void rendering_worker::notify_output() {
     {
         std::lock_guard lg(m);
         notify_output_queued = false;

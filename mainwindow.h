@@ -2,37 +2,42 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-
 #include <QMouseEvent>
 #include <complex>
+
 #include "rendering_worker.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
-class MainWindow : public QMainWindow
-{
+class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
     MainWindow(QWidget *parent = nullptr);
+
     ~MainWindow();
 
-    void paintEvent(QPaintEvent* event) override;
-    void wheelEvent(QWheelEvent* event) override;
-    void mousePressEvent(QMouseEvent* event) override;
-    void mouseReleaseEvent(QMouseEvent* event) override;
-    void mouseMoveEvent(QMouseEvent* event) override;
+    void paintEvent(QPaintEvent *event) override;
 
-protected:
-    double pixel_color(int x, int y, int width, int height, double scale, std::complex<double> center_offset);
+    void wheelEvent(QWheelEvent *event) override;
 
-    QImage draw_preview();
+    void mousePressEvent(QMouseEvent *event) override;
+
+    void mouseReleaseEvent(QMouseEvent *event) override;
+
+    void mouseMoveEvent(QMouseEvent *event) override;
+
+    void resizeEvent(QResizeEvent *event) override;
+
 private slots:
-
     void update_output();
 private:
+    QImage draw_preview();
+
+    void send_input();
+
     Ui::MainWindow *ui;
     double current_scale = 1. / 200.;
     int last_x, last_y;
