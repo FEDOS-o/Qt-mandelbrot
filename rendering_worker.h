@@ -59,7 +59,7 @@ private slots:
 
 public:
     static int const BEGIN_BATCH_SIZE = 64;
-    static int const THREADS_MAX = 8;
+    int const THREADS_MAX = std::thread::hardware_concurrency();
 
 private:
     static uint64_t const INPUT_VERSION_QUIT = 0;
